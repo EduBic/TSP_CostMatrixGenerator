@@ -9,9 +9,10 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class Main {
 
-    public static int H = 100;  // use a max of 100 holes
-    public static int WIDTH_BOARD = 500;
-    static String FILENAME = "costs" + "_" + H +".dat";
+    static int H = 80;  // use a max of 100 holes
+    static int WIDTH_BOARD = 500;
+    private static String FILENAME = "fb";
+    private static String FILENAME_DAT;
 
     //Options
     static boolean ROUND_ENABLE = false;
@@ -19,15 +20,21 @@ public class Main {
     static int SIGN_DIGITS = 2;
     static int SEED_RAND = 72;
 
-    // Area Options
-    static int MIN_AREA_WIDTH = WIDTH_BOARD / 20;
-    static int MAX_AREA_WIDTH = WIDTH_BOARD / 5;
+    static int LINE_LENGHT = WIDTH_BOARD / 20;
 
 
     public static double[][] mC;
     public static Hole[] mHoles;
 
     public static void main(String[] args) throws IOException {
+
+        if (args.length < 1) {
+            throw new IOException();
+        } else {
+            H = Integer.parseInt(args[0]);
+            FILENAME += H;
+            FILENAME_DAT = FILENAME + ".dat";
+        }
 
         mHoles = generateMicroAreasHoles();
         //printTableOfHoles(mHoles);
@@ -42,110 +49,130 @@ public class Main {
     private static Hole[] generateMicroAreasHoles() {
         ArrayList<Hole> holes = new ArrayList<>();
 
-        int maxAreas = 10;
-        int maxPointsPerArea = H / 25;
-        int minPointsPerArea = H / 50;
+        int maxAreas = 3;
+        int maxLines = 4;
+        int maxPointsPerArea = H / 5;
+        int minPointsPerArea = H / 20;
 
         int pointsCount = H;
-        ArrayList<Area> areas = buildAreas(maxAreas);
+        int totAreasPoints = 0;
+        int totLinesPoints = 0;
+        ArrayList<Area> areas = Area.buildAreas(maxAreas);
+        ArrayList<Line> lines = Line.buildLines(maxLines, LINE_LENGHT);
 
         for (Area area : areas) {
-            int pointsPerArea = ThreadLocalRandom.current().nextInt(minPointsPerArea, maxPointsPerArea);
-            pointsCount -= pointsPerArea;
+            int pointsPerArea = ThreadLocalRandom.current()
+                        .nextInt(minPointsPerArea, maxPointsPerArea);
+            while (pointsPerArea % 4 != 0) { // pointsPerArea must be divided by four
+                pointsPerArea++;
+            }
 
-            // Instert points into micro area
-            if (pointsPerArea < (H / 20)) {
-                generateRectHoles(holes, pointsCount, area.originX, area.maxX, area.originY, area.maxY);
-            } else {
-                generateRndHoles(holes, pointsCount, area.originX, area.maxX, area.originY, area.maxY);
+            if (pointsCount >= pointsPerArea) {
+
+                System.out.println("Area, points: " + pointsPerArea);
+
+                pointsCount -= pointsPerArea;
+                totAreasPoints += pointsPerArea;
+
+                // Instert points into micro area   
+             
+                generateRectHoles(holes, pointsPerArea, area.originX, area.maxX, area.originY, area.maxY);
             }
         }
 
-        if (pointsCount > 0) {
-            generateRndHoles(holes, pointsCount, 0, WIDTH_BOARD, 0, WIDTH_BOARD);
+        for (Line line : lines) {
+            int pointsPerLine = ThreadLocalRandom.current().nextInt(4, 8);
+
+            if (pointsPerLine <= pointsCount) {
+                System.out.println("Line, points: " + pointsPerLine);
+
+                pointsCount -= pointsPerLine;
+                totLinesPoints += pointsPerLine;
+
+                double distanceBetween = LINE_LENGHT / (pointsPerLine - 1);
+
+                // chose if grow vertical or horizontal
+                double increaseX = 0;
+                double increaseY = 0;
+                int which = ThreadLocalRandom.current().nextInt();
+
+                if (which % 2 == 0) {
+                    increaseX = distanceBetween;
+                } else {
+                    increaseY = distanceBetween;
+                }
+
+                double x = line.originX;
+                double y = line.originY;
+                holes.add(new Hole(x, y));
+
+                for (int i = 1; i < pointsPerLine; i++) {
+                    x += increaseX;
+                    y += increaseY;
+                    holes.add(new Hole(x, y));
+                }
+            }
         }
+
+        System.out.println("\nTotal expected points in Areas: " + totAreasPoints);
+        System.out.println("\nTotal expected points in Lines: " + totLinesPoints);
+        System.out.println("Total points in holes: " + holes.size());
+
+        System.out.println("\nHoles random: " + pointsCount);
+
+        while (pointsCount > 0) {
+            holes.add(generateRndHolesNotOverlap(areas, 0, WIDTH_BOARD, 0, WIDTH_BOARD));
+            pointsCount--;
+        }
+
+        System.out.println("Final number of holes " + holes.size());
 
         return holes.toArray(new Hole[holes.size()]);
     }
 
-    private static ArrayList<Area> buildAreas(int maxAreas) {
-        Area firstArea = buildRandomArea();
-        ArrayList<Area> areas = new ArrayList<>();
-
-        int areasBuilt = 0;
-
-        while (areasBuilt < maxAreas) {
-            Area newArea = buildRandomArea();
-            
-            if (!newArea.overlap(areas)) {
-                areas.add(newArea);
-                areasBuilt++;
-            }
-        }
-
-        return areas;
-    }
-
-    private static Area buildRandomArea() {
-        int width = ThreadLocalRandom.current().nextInt(MIN_AREA_WIDTH, MAX_AREA_WIDTH + 1);
-        return new Area(width, 
-            ThreadLocalRandom.current().nextInt(0, WIDTH_BOARD - width),
-            ThreadLocalRandom.current().nextInt(0, WIDTH_BOARD - width)
-            );
-    }
-
-
-    private static final int GO_RIGHT_STATE = 1;
-    private static final int GO_DOWN_STATE = 2;
-    private static final int GO_LEFT_STATE = 3;
-    private static final int GO_UP_STATE = 4;
-    private static int state = GO_RIGHT_STATE;
-
     private static void generateRectHoles(ArrayList<Hole> holes, int maxHoles, int minX, 
                                         int maxX, int minY, int maxY) {
-        double padding = (maxX - minX) * 0.042;
-        double perimeter = ((maxX - minX) + (maxY - minY)) * 2;
-        double shift = perimeter / maxHoles;
 
-        double xLine = ThreadLocalRandom.current().nextDouble(minX, minX + padding);
-        double yLine = ThreadLocalRandom.current().nextDouble(minY, minY + padding);
+        double outerPerimeter = ((maxX - minX) + (maxY - minY)) * 2;
+        double distBetween = outerPerimeter / (maxHoles - 1);
 
-        for (int i = 0; i < maxHoles; i++) {
-            switch(state) {
-                case GO_RIGHT_STATE:
-                    xLine += shift;
-                    if (xLine > maxX - padding) 
-                        state = GO_DOWN_STATE;
-                    break;
-                case GO_DOWN_STATE:
-                    yLine += shift;
-                    if (yLine > maxY - padding)
-                        state = GO_LEFT_STATE;
-                    break;
-                case GO_LEFT_STATE:
-                    xLine -= shift;
-                    if (xLine <= minX + padding)
-                        state = GO_UP_STATE;
-                    break;
-                case GO_UP_STATE:
-                    yLine -= shift;
-                    if (yLine <= minY + padding) {
-                        System.out.println("Finish rect");
-                        state = GO_RIGHT_STATE;
-                        // restart at random
-                        xLine = ThreadLocalRandom.current().nextDouble(minX + padding, minX + padding * 2);
-                        yLine = xLine;//ThreadLocalRandom.current().nextDouble(minY + padding, minY + padding * 2);
-                        padding = padding * 2;
-                    }
-                    break;
-                default:
-                    break;
+        // starting point is the origin
+        double xLine = minX;
+        double yLine = minY;
+
+        //for (int square = 0; square < 2; square++) {
+
+            for (int edge = 0; edge < 4; edge++) {
+
+                for (int i = 0; i < Math.floor(maxHoles / 4); i++) {
+                    if (edge == 0) xLine += distBetween;
+                    if (edge == 1) yLine += distBetween;
+                    if (edge == 2) xLine -= distBetween;
+                    if (edge == 3) yLine -= distBetween;
+
+                    //System.out.println("New hole");
+                    holes.add(new Hole(xLine, yLine));
+                }
             }
-        
-            holes.add(new Hole(xLine, yLine));
-        }
+            System.out.println("Holes into area: " + holes.size());
+    }
 
-        state = GO_RIGHT_STATE;
+    private static Hole generateRndHolesNotOverlap(ArrayList<Area> areas,
+                                            int originX, int maxX, int originY, int maxY) {
+        // init position
+        double rndX = ThreadLocalRandom.current().nextDouble(originX + 1, maxX);
+        double rndY = ThreadLocalRandom.current().nextDouble(originY + 1, maxY);
+
+        for (Area area : areas) {
+            while (rndX >= area.originX && rndX <= area.maxX && 
+                rndY >= area.originY && rndY <= area.maxY) { 
+                // overlap -> change position
+                rndX = ThreadLocalRandom.current().nextDouble(originX + 1, maxX);
+                rndY = ThreadLocalRandom.current().nextDouble(originY + 1, maxY);
+            }
+        }
+        
+        return new Hole(rndX, rndY);
     }
 
     // Origin point is on TOP LEFT
@@ -300,7 +327,7 @@ public class Main {
 
     public static void generateDat(double[][] C) throws IOException {
         BufferedWriter outputWriter = null;
-        outputWriter = new BufferedWriter(new FileWriter(FILENAME));
+        outputWriter = new BufferedWriter(new FileWriter(FILENAME_DAT));
 
         String digit;
         BigDecimal d;

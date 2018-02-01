@@ -1,8 +1,13 @@
 package com.company;
 
 import java.util.ArrayList;
+import java.util.concurrent.ThreadLocalRandom;
 
 class Area {
+
+    // Area Options
+    static int MIN_AREA_WIDTH = Main.WIDTH_BOARD / 20;
+    static int MAX_AREA_WIDTH = Main.WIDTH_BOARD / 10;
 
     int originX;
     int originY;
@@ -19,27 +24,6 @@ class Area {
 
     public boolean overlap(ArrayList<Area> areas) {
         for (Area area : areas) {
-            /*if (this.originX >= area.originX && this.originY >= area.originY && 
-                this.maxX <= area.maxX && this.maxY <= area.maxY) {
-                // area overlap
-                return true;   
-            }*/
-            /*if (originX >= area.originX && originX <= area.maxX &&
-                originY >= area.originY && originY <= area.maxY) {
-                return true;
-            }
-            if (maxX >= area.originX && maxX <= area.maxX && 
-                maxY >= area.originY && maxY <= area.maxY) {
-                return true;
-            }
-            if (originX >= area.originX && originX <= area.maxX &&
-                maxY >= area.originY && maxY <= area.maxY) {
-                return true;
-            }
-            if (maxX >= area.originX && maxX <= area.maxX &&
-                originY >= area.originY && originY <= area.maxY) {
-                return true;
-            }*/
             if (originX < area.maxX &&
                 maxX > area.originX &&
                 originY < area.maxY &&
@@ -49,4 +33,34 @@ class Area {
         }
         return false;
     } 
+
+    public int getWidth() {
+        return maxX - originX;
+    }
+
+    public static ArrayList<Area> buildAreas(int maxAreas) {
+        Area firstArea = buildRandomArea();
+        ArrayList<Area> areas = new ArrayList<>();
+
+        int areasBuilt = 0;
+
+        while (areasBuilt < maxAreas) {
+            Area newArea = buildRandomArea();
+            
+            if (!newArea.overlap(areas)) {
+                areas.add(newArea);
+                areasBuilt++;
+            }
+        }
+
+        return areas;
+    }
+
+    private static Area buildRandomArea() {
+        int width = ThreadLocalRandom.current().nextInt(MIN_AREA_WIDTH, MAX_AREA_WIDTH + 1);
+        return new Area(width, 
+            ThreadLocalRandom.current().nextInt(0, Main.WIDTH_BOARD - width),
+            ThreadLocalRandom.current().nextInt(0, Main.WIDTH_BOARD - width)
+            );
+    }
 }
