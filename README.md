@@ -3,6 +3,7 @@ Generator of Cost Matrix for Travel Salesman Problem (TSP). First it generates a
 - random
 - square area
 - line
+
 From this points it write a symmetric matrix of the cost, where the costs are the distances from one point to others.
 
 ## How to use
